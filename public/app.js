@@ -23,6 +23,23 @@ const posCanvas   = document.getElementById('pos-canvas');
 const velCanvas   = document.getElementById('vel-canvas');
 const decimationSelect = document.getElementById('decimation-select');
 
+// Statistics page elements
+const statsPosCount = document.getElementById('stats-pos-count');
+const statsVelCount = document.getElementById('stats-vel-count');
+const statLatMean   = document.getElementById('stat-lat-mean');
+const statLonMean   = document.getElementById('stat-lon-mean');
+const statAltMean   = document.getElementById('stat-alt-mean');
+const statVelEMean  = document.getElementById('stat-vel-e-mean');
+const statVelNMean  = document.getElementById('stat-vel-n-mean');
+const statVelUMean  = document.getElementById('stat-vel-u-mean');
+
+const histLatCanvas   = document.getElementById('hist-lat-canvas');
+const histLonCanvas   = document.getElementById('hist-lon-canvas');
+const histAltCanvas   = document.getElementById('hist-alt-canvas');
+const histVelECanvas  = document.getElementById('hist-vel-e-canvas');
+const histVelNCanvas  = document.getElementById('hist-vel-n-canvas');
+const histVelUCanvas  = document.getElementById('hist-vel-u-canvas');
+
 let decimationFactor = 1;
 let decimCounter = 0;
 
@@ -72,11 +89,22 @@ if (velChart) {
 }
 
   }
+
+  if (pageId === 'page-stats') {
+    try { if (histLatChart) histLatChart.resize(); } catch (e) {}
+    try { if (histLonChart) histLonChart.resize(); } catch (e) {}
+    try { if (histAltChart) histAltChart.resize(); } catch (e) {}
+    try { if (histVelEChart) histVelEChart.resize(); } catch (e) {}
+    try { if (histVelNChart) histVelNChart.resize(); } catch (e) {}
+    try { if (histVelUChart) histVelUChart.resize(); } catch (e) {}
+    updateStats();
+  }
 }
 
 function pageFromHash() {
   const h = (location.hash || '').replace('#', '').toLowerCase();
   if (h === 'historics' || h === 'history') return 'page-historics';
+  if (h === 'stats' || h === 'statistics') return 'page-stats';
   if (h === 'observables' || h === 'channels') return 'page-observables';
   return 'page-summary';
 }
@@ -90,6 +118,7 @@ function initNav() {
       const pid = t.getAttribute('data-page');
       if (pid === 'page-summary') location.hash = '#summary';
       else if (pid === 'page-historics') location.hash = '#historics';
+      else if (pid === 'page-stats') location.hash = '#stats';
       else if (pid === 'page-observables') location.hash = '#observables';
       showPage(pid);
     });
@@ -145,6 +174,8 @@ const plotData = {
 };
 
 let altChart, cn0Chart, dopChart, posChart, velChart;
+let histLatChart, histLonChart, histAltChart;
+let histVelEChart, histVelNChart, histVelUChart;
 let needsAltUpdate = false;
 let needsCn0Update = false;
 let needsDopUpdate = false;
@@ -153,6 +184,9 @@ let needsVelUpdate = false;
 let renderScheduled = false;
 let lastRenderMs = 0;
 const RENDER_INTERVAL_MS = 500;
+const STATS_BINS = 21;
+const STATS_UPDATE_MS = 1000;
+let lastStatsUpdate = 0;
 
 // ---- GNSS-SDR control helpers ----
 function setGnssUi(running, msg) {
@@ -379,6 +413,90 @@ function getChartConfig(title, yLabel, yMin, yMax, isSingleSeries, datasetsMap) 
   };
 }
 
+function getHistogramConfig(title, color) {
+  return {
+    type: 'bar',
+    data: {
+      labels: [],
+      datasets: [{
+        label: title,
+        data: [],
+        backgroundColor: color
+      }]
+    },
+    options: {
+      animation: false,
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          title: { display: true, text: 'Deviation from mean' },
+          ticks: { maxTicksLimit: 7 }
+        },
+        y: {
+          title: { display: true, text: 'Count' },
+          beginAtZero: true
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: { mode: 'index', intersect: false }
+      }
+    }
+  };
+}
+
+function getSeriesValues(plotObj, key) {
+  const ds = plotObj.datasets.get(key);
+  if (!ds || !Array.isArray(ds.data)) return [];
+  const values = [];
+  for (const point of ds.data) {
+    if (point && typeof point.y === 'number' && !isNaN(point.y)) {
+      values.push(point.y);
+    }
+  }
+  return values;
+}
+
+function computeMean(values) {
+  if (!values.length) return null;
+  let sum = 0;
+  for (const v of values) sum += v;
+  return sum / values.length;
+}
+
+function buildDeviationHistogram(values, bins, minRange, decimals) {
+  if (!values.length) {
+    return { labels: [], counts: [], mean: null };
+  }
+
+  const mean = computeMean(values);
+  const devs = values.map((v) => v - mean);
+  let maxAbs = 0;
+  for (const d of devs) {
+    const a = Math.abs(d);
+    if (a > maxAbs) maxAbs = a;
+  }
+  const range = Math.max(maxAbs, minRange);
+  const binWidth = (2 * range) / bins;
+  const counts = new Array(bins).fill(0);
+
+  for (const d of devs) {
+    let idx = Math.floor((d + range) / binWidth);
+    if (idx < 0) idx = 0;
+    if (idx >= bins) idx = bins - 1;
+    counts[idx] += 1;
+  }
+
+  const labels = new Array(bins);
+  for (let i = 0; i < bins; i++) {
+    const center = -range + binWidth * (i + 0.5);
+    labels[i] = center.toFixed(decimals);
+  }
+
+  return { labels, counts, mean };
+}
+
 function initCharts() {
   altChart = new Chart(altCanvas, getChartConfig('Altitude', 'Height (m)', null, null, true));
   cn0Chart = new Chart(cn0Canvas, getChartConfig('C/N₀ per PRN', 'C/N₀ (dB-Hz)', 20, 55, false, plotData.cn0.datasets));
@@ -392,6 +510,25 @@ velChart = new Chart(velCanvas, getChartConfig('Velocity ENU', 'Velocity (m/s)',
   dopChart.data.datasets = Array.from(plotData.dop.datasets.values());
   posChart.data.datasets = Array.from(plotData.pos.datasets.values());
   velChart.data.datasets = Array.from(plotData.vel.datasets.values());
+
+  if (histLatCanvas) {
+    histLatChart = new Chart(histLatCanvas, getHistogramConfig('Lat deviation', CHART_COLORS[0]));
+  }
+  if (histLonCanvas) {
+    histLonChart = new Chart(histLonCanvas, getHistogramConfig('Lon deviation', CHART_COLORS[1]));
+  }
+  if (histAltCanvas) {
+    histAltChart = new Chart(histAltCanvas, getHistogramConfig('Alt deviation', CHART_COLORS[2]));
+  }
+  if (histVelECanvas) {
+    histVelEChart = new Chart(histVelECanvas, getHistogramConfig('Vel E deviation', CHART_COLORS[3]));
+  }
+  if (histVelNCanvas) {
+    histVelNChart = new Chart(histVelNCanvas, getHistogramConfig('Vel N deviation', CHART_COLORS[4]));
+  }
+  if (histVelUCanvas) {
+    histVelUChart = new Chart(histVelUCanvas, getHistogramConfig('Vel U deviation', CHART_COLORS[5]));
+  }
 }
 
 function initMap() {
@@ -673,6 +810,59 @@ function updateNamedSeriesPlot(plotObj, chart, key, t, y, label) {
   }
 }
 
+function formatStatValue(value, decimals) {
+  if (!Number.isFinite(value)) return '-';
+  return value.toFixed(decimals);
+}
+
+function applyHistogram(chart, stats) {
+  if (!chart) return;
+  chart.data.labels = stats.labels;
+  chart.data.datasets[0].data = stats.counts;
+  chart.update('none');
+}
+
+function updateStats(force) {
+  if (!force && Date.now() - lastStatsUpdate < STATS_UPDATE_MS) return;
+  lastStatsUpdate = Date.now();
+
+  const latValues = getSeriesValues(plotData.pos, 'lat');
+  const lonValues = getSeriesValues(plotData.pos, 'lon');
+  const altValues = getSeriesValues(plotData.pos, 'alt');
+
+  const velEValues = getSeriesValues(plotData.vel, 'vel_e');
+  const velNValues = getSeriesValues(plotData.vel, 'vel_n');
+  const velUValues = getSeriesValues(plotData.vel, 'vel_u');
+
+  const posCount = Math.max(latValues.length, lonValues.length, altValues.length);
+  const velCount = Math.max(velEValues.length, velNValues.length, velUValues.length);
+
+  if (statsPosCount) statsPosCount.textContent = 'Samples: ' + posCount;
+  if (statsVelCount) statsVelCount.textContent = 'Samples: ' + velCount;
+
+  const latStats = buildDeviationHistogram(latValues, STATS_BINS, 1e-6, 6);
+  const lonStats = buildDeviationHistogram(lonValues, STATS_BINS, 1e-6, 6);
+  const altStats = buildDeviationHistogram(altValues, STATS_BINS, 0.5, 2);
+
+  const velEStats = buildDeviationHistogram(velEValues, STATS_BINS, 0.05, 2);
+  const velNStats = buildDeviationHistogram(velNValues, STATS_BINS, 0.05, 2);
+  const velUStats = buildDeviationHistogram(velUValues, STATS_BINS, 0.05, 2);
+
+  if (statLatMean) statLatMean.textContent = formatStatValue(latStats.mean, 6);
+  if (statLonMean) statLonMean.textContent = formatStatValue(lonStats.mean, 6);
+  if (statAltMean) statAltMean.textContent = formatStatValue(altStats.mean, 2);
+  if (statVelEMean) statVelEMean.textContent = formatStatValue(velEStats.mean, 2);
+  if (statVelNMean) statVelNMean.textContent = formatStatValue(velNStats.mean, 2);
+  if (statVelUMean) statVelUMean.textContent = formatStatValue(velUStats.mean, 2);
+
+  applyHistogram(histLatChart, latStats);
+  applyHistogram(histLonChart, lonStats);
+  applyHistogram(histAltChart, altStats);
+  applyHistogram(histVelEChart, velEStats);
+  applyHistogram(histVelNChart, velNStats);
+  applyHistogram(histVelUChart, velUStats);
+}
+
 function handleMessage(msg) {
   if (Array.isArray(msg)) {
     msg.forEach(handleMessage);
@@ -728,6 +918,10 @@ setInterval(function() {
     pvtAge.textContent = 'Last PVT: ' + dt + ' s ago';
   }
 }, 1000);
+
+setInterval(function() {
+  updateStats();
+}, STATS_UPDATE_MS);
 
 // Init on load
 initCharts();

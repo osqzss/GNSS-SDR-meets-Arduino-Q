@@ -44,6 +44,7 @@
     <nav class="tabs" aria-label="Pages">
       <button class="tab" data-page="page-summary" id="tab-summary">Summary</button>
       <button class="tab" data-page="page-historics" id="tab-historics">Historics</button>
+      <button class="tab" data-page="page-stats" id="tab-stats">Statistics</button>
       <button class="tab" data-page="page-observables" id="tab-observables">Observables</button>
     </nav>
   </header>
@@ -147,6 +148,81 @@
           <canvas id="vel-canvas"></canvas>
         </div>
       </section>
+    </section>
+
+    <!-- PAGE: STATISTICS -->
+    <section class="page" id="page-stats" aria-labelledby="tab-stats">
+      <div class="stats-stack">
+        <section class="card">
+          <h2>Position Statistics</h2>
+          <small id="stats-pos-count">Samples: 0</small>
+
+          <div class="stats-grid">
+            <div class="stat">
+              <div class="stat-label">Lat mean (deg)</div>
+              <div class="stat-value" id="stat-lat-mean">-</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Lon mean (deg)</div>
+              <div class="stat-value" id="stat-lon-mean">-</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Alt mean (m)</div>
+              <div class="stat-value" id="stat-alt-mean">-</div>
+            </div>
+          </div>
+
+          <div class="hist-grid">
+            <div class="hist-card">
+              <div class="plot-title">Lat deviation</div>
+              <canvas id="hist-lat-canvas"></canvas>
+            </div>
+            <div class="hist-card">
+              <div class="plot-title">Lon deviation</div>
+              <canvas id="hist-lon-canvas"></canvas>
+            </div>
+            <div class="hist-card">
+              <div class="plot-title">Alt deviation</div>
+              <canvas id="hist-alt-canvas"></canvas>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>Velocity Statistics</h2>
+          <small id="stats-vel-count">Samples: 0</small>
+
+          <div class="stats-grid">
+            <div class="stat">
+              <div class="stat-label">Vel E mean (m/s)</div>
+              <div class="stat-value" id="stat-vel-e-mean">-</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Vel N mean (m/s)</div>
+              <div class="stat-value" id="stat-vel-n-mean">-</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Vel U mean (m/s)</div>
+              <div class="stat-value" id="stat-vel-u-mean">-</div>
+            </div>
+          </div>
+
+          <div class="hist-grid">
+            <div class="hist-card">
+              <div class="plot-title">Vel E deviation</div>
+              <canvas id="hist-vel-e-canvas"></canvas>
+            </div>
+            <div class="hist-card">
+              <div class="plot-title">Vel N deviation</div>
+              <canvas id="hist-vel-n-canvas"></canvas>
+            </div>
+            <div class="hist-card">
+              <div class="plot-title">Vel U deviation</div>
+              <canvas id="hist-vel-u-canvas"></canvas>
+            </div>
+          </div>
+        </section>
+      </div>
     </section>
 
     <!-- PAGE: OBSERVABLES -->
