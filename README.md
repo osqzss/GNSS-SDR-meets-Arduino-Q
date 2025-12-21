@@ -92,6 +92,16 @@ Selected GNSS-SDR outputs (observables, C/N₀, and PVT) are exposed for monitor
 
 ![Web interface](images/web_interface.png)
 
+### GNSS-SDR config path
+
+The Node.js server resolves GNSS-SDR config files from an environment variable first, falling back to the current user's home directory:
+
+```
+GNSS_SDR_HOME=/home/arduino/gnss-sdr
+```
+
+If `GNSS_SDR_HOME` is not set, it defaults to `~/<user>/gnss-sdr` via the OS user home.
+
 ---
 
 ## Embedded LED matrix visualization
