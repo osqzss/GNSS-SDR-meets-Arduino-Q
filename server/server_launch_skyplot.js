@@ -7,6 +7,8 @@ const dgram = require("dgram");
 const WebSocket = require("ws");
 const protobuf = require("protobufjs");
 const { spawn } = require("child_process");
+const os = require("os");
+const path = require("path");
 
 // ----------------- Configuration -----------------
 const HTTP_PORT       = 4242;
@@ -16,8 +18,9 @@ const MAX_PLOT_POINTS = 300;  // Initial default, user can change via slider
 
 // GNSS-SDR executable and configs
 const GNSS_CMD   = "gnss-sdr";
-const GNSS_CONF1 = "/home/gorgor/gnss-sdr/conf/File_input/file_GPS_L1_alta_dinamica.conf";
-const GNSS_CONF2 = "/home/gorgor/gnss-sdr/conf/RealTime_input/all_bands_rtl_realtime.conf";
+const GNSS_BASE = process.env.GNSS_SDR_HOME || path.join(os.homedir(), "gnss-sdr");
+const GNSS_CONF1 = path.join(GNSS_BASE, "conf", "File_input", "file_GPS_L1_alta_dinamica.conf");
+const GNSS_CONF2 = path.join(GNSS_BASE, "conf", "RealTime_input", "all_bands_rtl_realtime.conf");
 
 // Track child process we spawn
 let gnssProcess = null;

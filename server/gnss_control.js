@@ -1,14 +1,18 @@
 // server/gnss_control.js
 const { spawn } = require("child_process");
+const os = require("os");
+const path = require("path");
 
 // --- GNSS-SDR command (adjust if needed) ---
 const GNSS_CMD = "gnss-sdr";
 
 // Configuration files (edit paths to your needs)
+const GNSS_BASE = process.env.GNSS_SDR_HOME || path.join(os.homedir(), "gnss-sdr");
+
 const GNSS_CONFIGS = {
-  conf1: "/home/arduino/gnss-sdr/conf/File_input/file_GPS_L1_alta_dinamica.conf",
-  conf2: "/home/arduino/gnss-sdr/conf/RealTime_input/all_bands_rtl_realtime.conf",
-  conf3: "/home/arduino/gnss-sdr/conf/File_input/cubesat_GPS.conf"
+  conf1: path.join(GNSS_BASE, "conf", "File_input", "file_GPS_L1_alta_dinamica.conf"),
+  conf2: path.join(GNSS_BASE, "conf", "RealTime_input", "all_bands_rtl_realtime.conf"),
+  conf3: path.join(GNSS_BASE, "conf", "File_input", "cubesat_GPS.conf")
 };
 
 let gnssProcess = null;
