@@ -413,7 +413,7 @@ function getChartConfig(title, yLabel, yMin, yMax, isSingleSeries, datasetsMap) 
   };
 }
 
-function getHistogramConfig(title, color) {
+function getHistogramConfig(title, color, xLabel) {
   return {
     type: 'bar',
     data: {
@@ -430,7 +430,7 @@ function getHistogramConfig(title, color) {
       maintainAspectRatio: false,
       scales: {
         x: {
-          title: { display: true, text: 'Deviation from mean' },
+          title: { display: true, text: (xLabel || 'Deviation from mean') },
           ticks: { maxTicksLimit: 7 }
         },
         y: {
@@ -465,13 +465,21 @@ function computeMean(values) {
   return sum / values.length;
 }
 
-function buildDeviationHistogram(values, bins, minRange, decimals) {
-  if (!values.length) {
-    return { labels: [], counts: [], mean: null };
+function computeStd(values, mean) {
+  if (!values.length || mean == null) return null;
+  let sumSq = 0;
+  for (const v of values) {
+    const d = v - mean;
+    sumSq += d * d;
+  }
+  return Math.sqrt(sumSq / values.length);
+}
+
+function buildDeviationHistogramFromDevs(devs, bins, minRange, decimals) {
+  if (!devs.length) {
+    return { labels: [], counts: [] };
   }
 
-  const mean = computeMean(values);
-  const devs = values.map((v) => v - mean);
   let maxAbs = 0;
   for (const d of devs) {
     const a = Math.abs(d);
@@ -494,7 +502,19 @@ function buildDeviationHistogram(values, bins, minRange, decimals) {
     labels[i] = center.toFixed(decimals);
   }
 
-  return { labels, counts, mean };
+  return { labels, counts };
+}
+
+function buildDeviationHistogram(values, bins, minRange, decimals) {
+  if (!values.length) {
+    return { labels: [], counts: [], mean: null, std: null };
+  }
+
+  const mean = computeMean(values);
+  const std = computeStd(values, mean);
+  const devs = values.map((v) => v - mean);
+  const hist = buildDeviationHistogramFromDevs(devs, bins, minRange, decimals);
+  return { labels: hist.labels, counts: hist.counts, mean, std };
 }
 
 function initCharts() {
@@ -512,22 +532,22 @@ velChart = new Chart(velCanvas, getChartConfig('Velocity ENU', 'Velocity (m/s)',
   velChart.data.datasets = Array.from(plotData.vel.datasets.values());
 
   if (histLatCanvas) {
-    histLatChart = new Chart(histLatCanvas, getHistogramConfig('Lat deviation', CHART_COLORS[0]));
+    histLatChart = new Chart(histLatCanvas, getHistogramConfig('Lat deviation', CHART_COLORS[0], 'Deviation from mean (m)'));
   }
   if (histLonCanvas) {
-    histLonChart = new Chart(histLonCanvas, getHistogramConfig('Lon deviation', CHART_COLORS[1]));
+    histLonChart = new Chart(histLonCanvas, getHistogramConfig('Lon deviation', CHART_COLORS[1], 'Deviation from mean (m)'));
   }
   if (histAltCanvas) {
-    histAltChart = new Chart(histAltCanvas, getHistogramConfig('Alt deviation', CHART_COLORS[2]));
+    histAltChart = new Chart(histAltCanvas, getHistogramConfig('Alt deviation', CHART_COLORS[2], 'Deviation from mean (m)'));
   }
   if (histVelECanvas) {
-    histVelEChart = new Chart(histVelECanvas, getHistogramConfig('Vel E deviation', CHART_COLORS[3]));
+    histVelEChart = new Chart(histVelECanvas, getHistogramConfig('Vel E deviation', CHART_COLORS[3], 'Deviation from mean (m/s)'));
   }
   if (histVelNCanvas) {
-    histVelNChart = new Chart(histVelNCanvas, getHistogramConfig('Vel N deviation', CHART_COLORS[4]));
+    histVelNChart = new Chart(histVelNCanvas, getHistogramConfig('Vel N deviation', CHART_COLORS[4], 'Deviation from mean (m/s)'));
   }
   if (histVelUCanvas) {
-    histVelUChart = new Chart(histVelUCanvas, getHistogramConfig('Vel U deviation', CHART_COLORS[5]));
+    histVelUChart = new Chart(histVelUCanvas, getHistogramConfig('Vel U deviation', CHART_COLORS[5], 'Deviation from mean (m/s)'));
   }
 }
 
@@ -810,9 +830,10 @@ function updateNamedSeriesPlot(plotObj, chart, key, t, y, label) {
   }
 }
 
-function formatStatValue(value, decimals) {
-  if (!Number.isFinite(value)) return '-';
-  return value.toFixed(decimals);
+function formatMeanStd(mean, std, meanDecimals, stdDecimals) {
+  if (!Number.isFinite(mean)) return '-';
+  if (!Number.isFinite(std)) return mean.toFixed(meanDecimals) + ' / -';
+  return mean.toFixed(meanDecimals) + ' / ' + std.toFixed(stdDecimals);
 }
 
 function applyHistogram(chart, stats) {
@@ -840,20 +861,30 @@ function updateStats(force) {
   if (statsPosCount) statsPosCount.textContent = 'Samples: ' + posCount;
   if (statsVelCount) statsVelCount.textContent = 'Samples: ' + velCount;
 
-  const latStats = buildDeviationHistogram(latValues, STATS_BINS, 1e-6, 6);
-  const lonStats = buildDeviationHistogram(lonValues, STATS_BINS, 1e-6, 6);
+  const latMean = computeMean(latValues);
+  const lonMean = computeMean(lonValues);
+
+  const latMeanDeg = latMean == null ? 0 : latMean;
+  const lonScale = 111320 * Math.cos(latMeanDeg * Math.PI / 180);
+  const latDevMeters = latMean == null ? [] : latValues.map((v) => (v - latMean) * 111320);
+  const lonDevMeters = lonMean == null ? [] : lonValues.map((v) => (v - lonMean) * lonScale);
+
+  const latStats = buildDeviationHistogramFromDevs(latDevMeters, STATS_BINS, 0.1, 2);
+  const lonStats = buildDeviationHistogramFromDevs(lonDevMeters, STATS_BINS, 0.1, 2);
+  const latStdM = latDevMeters.length ? computeStd(latDevMeters, 0) : null;
+  const lonStdM = lonDevMeters.length ? computeStd(lonDevMeters, 0) : null;
   const altStats = buildDeviationHistogram(altValues, STATS_BINS, 0.5, 2);
 
   const velEStats = buildDeviationHistogram(velEValues, STATS_BINS, 0.05, 2);
   const velNStats = buildDeviationHistogram(velNValues, STATS_BINS, 0.05, 2);
   const velUStats = buildDeviationHistogram(velUValues, STATS_BINS, 0.05, 2);
 
-  if (statLatMean) statLatMean.textContent = formatStatValue(latStats.mean, 6);
-  if (statLonMean) statLonMean.textContent = formatStatValue(lonStats.mean, 6);
-  if (statAltMean) statAltMean.textContent = formatStatValue(altStats.mean, 2);
-  if (statVelEMean) statVelEMean.textContent = formatStatValue(velEStats.mean, 2);
-  if (statVelNMean) statVelNMean.textContent = formatStatValue(velNStats.mean, 2);
-  if (statVelUMean) statVelUMean.textContent = formatStatValue(velUStats.mean, 2);
+  if (statLatMean) statLatMean.textContent = formatMeanStd(latMean, latStdM, 6, 2);
+  if (statLonMean) statLonMean.textContent = formatMeanStd(lonMean, lonStdM, 6, 2);
+  if (statAltMean) statAltMean.textContent = formatMeanStd(altStats.mean, altStats.std, 2, 2);
+  if (statVelEMean) statVelEMean.textContent = formatMeanStd(velEStats.mean, velEStats.std, 2, 2);
+  if (statVelNMean) statVelNMean.textContent = formatMeanStd(velNStats.mean, velNStats.std, 2, 2);
+  if (statVelUMean) statVelUMean.textContent = formatMeanStd(velUStats.mean, velUStats.std, 2, 2);
 
   applyHistogram(histLatChart, latStats);
   applyHistogram(histLonChart, lonStats);
