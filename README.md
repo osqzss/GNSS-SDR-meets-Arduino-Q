@@ -164,9 +164,9 @@ The GPL license ensures practical usability, inspection, and continuous improvem
 
 In summary:
 
-- Copies may be distributed free of charge or commercially, provided the corresponding source code is made available under GPL-3.0.
+- Copies may be distributed free of charge or commercially, provided the corresponding source code is made available under GPL-2.0.
 - The licensed material may be studied and modified.
-- Modified versions must remain under GPL-3.0 **if distributed**; there is no obligation to distribute modifications.
+- Modified versions must remain under GPL-2.0 **if distributed**; there is no obligation to distribute modifications.
 - GNSS-SDR–based software cannot be redistributed under proprietary or non-disclosure licenses.
 - Hardware devices running this software may be sold; if the software is distributed, it must remain GPL-licensed.
 
